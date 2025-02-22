@@ -117,8 +117,15 @@ _log_filename = setup_logger(
     debug = debug,
 )
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from kivy.uix.popup import Popup
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.filechooser import FileChooserListView
+from kivy.core.window import Window
+from kivy.uix.textinput import TextInput
+from kivy.storage.jsonstore import JsonStore
 import tkwidgets
 from PIL import Image, ImageTk, ImageDraw
 from settings import Settings
@@ -127,7 +134,8 @@ import numpy
 import typing
 from copy import copy, deepcopy
 import pathlib
-import webbrowser
+from android import intent
+from android.storage import primary_external_storage_path
 
 import wmwpy
 from scrollframe import ScrollFrame
@@ -475,89 +483,31 @@ class WME(tk.Tk):
         self.resetProperties()
         self.createProgressBar()
     
-    def enableWindow(self):
-        self.bind(f'<{crossplatform.modifier()}-s>', self.saveLevel)
-        self.bind(f'<{crossplatform.modifier()}-S>', self.saveLevelAs)
-        self.bind(f'<{crossplatform.modifier()}-o>', self.openLevel)
-        
-        if platform.system() == 'Linux':
-            self.level_canvas.bind("<Button-4>", self.onLevelMouseWheel)
-            self.level_canvas.bind("<Button-5>", self.onLevelMouseWheel)
-            
-            self.level_canvas.bind("<Shift-Button-4>", lambda *args: self.onLevelMouseWheel(*args, type = 1))
-            self.level_canvas.bind("<Shift-Button-5>", lambda *args: self.onLevelMouseWheel(*args, type = 1))
-        else:
-            self.level_canvas.bind("<MouseWheel>", self.onLevelMouseWheel)
-            self.level_canvas.bind("<Shift-MouseWheel>", lambda *args: self.onLevelMouseWheel(*args, type = 1))
-        
-        self.level_canvas.bind('<Button-1>', self.onLevelClick)
-        self.level_canvas.bind('<Button1-Motion>', self.onLevelMove)
-        
-        self.level_canvas.bind('<Enter>', self.bindKeyboardShortcuts)
-        self.level_canvas.bind('<Leave>', self.unbindKeyboardShortcuts)
-        
-        if platform.system() == 'Darwin':
-            self.level_canvas.bind('<Button-2>', self.onLevelRightClick)
-        else:
-            self.level_canvas.bind('<Button-3>', self.onLevelRightClick)
-        
-        self.object_selector['treeview'].configure(selectmode = 'browse')
-        self.object_selector['treeview'].state(("!disabled",))
-        # re-enable item opening on click
-        self.object_selector['treeview'].unbind('<Button-1>')
-        
-        items = self.menubar.index('end')
-        
-        for item in range(items):
-            self.menubar.entryconfig(item + 1, state = 'normal')
-        
-        self.updateLevel()
-        
-        self.bindKeyboardShortcuts()
+def enableWindow(self):
+
+    self.bind(on_key_down=self.bind_keyboard_shortcuts)
+    self.bind(on_key_up=self.unbind_keyboard_shortcuts)
+
+    self.level_canvas.bind(on_touch_down=self.on_level_touch)
+    self.level_canvas.bind(on_touch_move=self.on_level_move)
+    self.level_canvas.bind(on_scroll_start=self.on_level_scroll)
+
     
-    def disableWindow(self):
-        self.unbind(f'<{crossplatform.modifier()}-s>')
-        self.unbind(f'<{crossplatform.modifier()}-S>')
-        self.unbind(f'<{crossplatform.modifier()}-o>')
-        
-        if platform.system() == 'Linux':
-            self.level_canvas.unbind("<Button-4>")
-            self.level_canvas.unbind("<Button-5>")
-            
-            self.level_canvas.unbind("<Shift-Button-4>")
-            self.level_canvas.unbind("<Shift-Button-5>")
-        else:
-            self.level_canvas.unbind("<MouseWheel>")
-            self.level_canvas.unbind("<Shift-MouseWheel>")
-            
-        self.level_canvas.unbind('<Button-1>')
-        self.level_canvas.unbind('<Button1-Motion>')
-        
-        if platform.system() == 'Darwin':
-            self.level_canvas.unbind('<Button-2>')
-        else:
-            self.level_canvas.unbind('<Button-3>')
-        
-        self.level_canvas.unbind('<Enter>')
-        self.level_canvas.unbind('<Leave>')
-        self.unbindKeyboardShortcuts()
-        
-        objects = self.level_canvas.find_withtag('object')
-        objects = list(objects) + list(self.level_canvas.find_withtag('selection'))
-        
-        for id in objects:
-            self.unbindObject(id)
-        
-        self.object_selector['treeview'].configure(selectmode = 'none')
-        
-        self.object_selector['treeview'].state(("disabled",))
-        # disable item opening on click
-        self.object_selector['treeview'].bind('<Button-1>', lambda e: 'break')
-        
-        items = self.menubar.index('end')
-        
-        for item in range(items):
-            self.menubar.entryconfig(item + 1, state = 'disabled')
+    self.object_selector['treeview'].disabled = False
+    self.updateLevel()
+    
+def disableWindow(self):
+    # Xóa sự kiện bàn phím
+    self.unbind(on_key_down=self.bind_keyboard_shortcuts)
+    self.unbind(on_key_up=self.unbind_keyboard_shortcuts)
+
+    # Xóa sự kiện chuột và cảm ứng
+    self.level_canvas.unbind(on_touch_down=self.on_level_touch)
+    self.level_canvas.unbind(on_touch_move=self.on_level_move)
+    self.level_canvas.unbind(on_scroll_start=self.on_level_scroll)
+
+    # Vô hiệu hóa danh sách object
+    self.object_selector['treeview'].disabled = True
     
     def bindKeyboardShortcuts(self, *args):
         logging.debug('Binding keyboard shortcuts')
@@ -1335,69 +1285,68 @@ class WME(tk.Tk):
             return
         
         level_index = self.level.objects.index(obj)
-        
-        if new_path == None:
-            new_path = filedialog.askopenfilename(
-                defaultextension = '.hs',
-                filetypes = (
-                    ('WMW Object', '*.hs'),
-                    ('Any', '*.*'),
-                ),
-                initialdir = wmwpy.utils.path.joinPath(
-                    self.game.gamepath,
-                    self.game.assets,
-                    self.game.baseassets,
-                    'Objects'
-                ),
-            )
-        
-        if new_path == None:
-            return
-        
-        if not isinstance(new_path, (wmwpy.filesystem.File)):
-            new_path = self.getFile(new_path)
-        
-        if new_path == None:
-            return
-        
-        self.level.objects.remove(obj)
-        
-        new_obj = self.level.addObject(
-            new_path,
-            properties = deepcopy(obj.properties),
-            pos = copy(obj.pos),
-            name = obj.name,
-        )
-        
-        self.level.objects.insert(level_index, self.level.objects.pop(self.level.objects.index(new_obj)))
 
-        
-        self.updateObject(new_obj)
-        self.updateObjectSelector()
-        if self.selectedObject == obj:
-            self.selectObject(new_obj)
-        
-        return new_obj
-    
-    def addObjectSelector(self, pos : tuple = (0,0)):
-        filename = filedialog.askopenfilename(
-            defaultextension = '.hs',
-            filetypes = (
-                ('WMW Object', '*.hs'),
-                ('Any', '*.*'),
-            ),
-            initialdir = wmwpy.utils.path.joinPath(
-                self.game.gamepath,
-                self.game.assets,
-                self.game.baseassets,
-                'Objects'
-            ),
-        )
-        
-        self.addObject(
-            filename,
-            pos = self.windowPosToWMWPos(pos)
-        )
+def select_object_file(self):
+    file_chooser = FileChooserListView(filters=['*.hs'])
+    popup = Popup(title="Select .hs", content=file_chooser, size_hint=(0.9, 0.9))
+
+    def on_selection(instance, selection):
+        if selection:
+            self.new_path = selection[0]  # Lưu đường dẫn file đã chọn
+            popup.dismiss()
+            
+            # Thêm phần xử lý new_path sau khi chọn file
+            new_path = self.new_path
+
+            if new_path is None:
+                return
+
+            if not isinstance(new_path, wmwpy.filesystem.File):
+                new_path = self.getFile(new_path)
+
+            if new_path is None:
+                return
+
+            self.level.objects.remove(obj)
+
+            new_obj = self.level.addObject(
+                new_path,
+                properties=deepcopy(obj.properties),
+                pos=copy(obj.pos),
+                name=obj.name,
+            )
+
+            self.level.objects.insert(
+                level_index, self.level.objects.pop(self.level.objects.index(new_obj))
+            )
+
+            self.updateObject(new_obj)
+            self.updateObjectSelector()
+            if self.selectedObject == obj:
+                self.selectObject(new_obj)
+
+            return new_obj
+
+    file_chooser.bind(on_selection=on_selection)
+    popup.open()
+
+def addObjectSelector(self, pos: tuple = (0, 0)):
+    file_chooser = FileChooserListView(filters=['*.hs'])
+    popup = Popup(title="Select .hs", content=file_chooser, size_hint=(0.9, 0.9))
+
+    def on_selection(instance, selection):
+        if selection:
+            filename = selection[0] 
+            popup.dismiss() 
+
+            
+            self.addObject(
+                filename,
+                pos=self.windowPosToWMWPos(pos)
+            )
+
+    file_chooser.bind(on_selection=on_selection)
+    popup.open()
     
     def updateProperties(self, obj : wmwpy.classes.Object | None = None):
         if obj == None:
@@ -2228,10 +2177,10 @@ class WME(tk.Tk):
 
         self.help_menu = tk.Menu(self.menubar, tearoff = 0)
 
-        self.help_menu.add_command(label = 'Discord', command = lambda *args : webbrowser.open(__links__['discord']))
+        self.help_menu.add_command(label = 'Discord', command = lambda *args : intent.open(__links__['discord']))
         self.help_menu.add_command(label = 'About', command = self.showAbout)
-        self.help_menu.add_command(label = 'Check for update', command = lambda *args : webbrowser.open(__links__['releases']))
-        self.help_menu.add_command(label = 'Bug report', command = lambda *args : webbrowser.open(__links__['bugs']))
+        self.help_menu.add_command(label = 'Check for update', command = lambda *args : intent.open(__links__['releases']))
+        self.help_menu.add_command(label = 'Bug report', command = lambda *args : intent.open(__links__['bugs']))
         self.help_menu.add_command(label = 'Open log', command = lambda *args : crossplatform.open_file(_log_filename))
 
 
@@ -2306,21 +2255,17 @@ class WME(tk.Tk):
             self,
             self.settings,
         )
+
+def openLevel(self, *args):
+    filechooser = FileChooserListView(filters=['*.xml'])
     
-    def openLevel(self, *args):
-        xml = filedialog.askopenfilename(
-            defaultextension = '.xml',
-            filetypes = (
-                ('WMW Level', '.xml'),
-                ('Any', '*.*')
-            ),
-            initialdir = wmwpy.utils.path.joinPath(
-                self.game.gamepath,
-                self.game.assets,
-                self.game.baseassets,
-                'Levels'
-            )
-        )
+    def on_selection(instance, selection):
+        if selection:
+            self.selected_file = selection[0]
+            print(f"File selected: {self.selected_file}")
+
+    filechooser.bind(on_selection=on_selection)
+    self.add_widget(filechooser)
         
         if xml in ['', None]:
             logging.debug('Open level canceled')
@@ -2338,7 +2283,7 @@ class WME(tk.Tk):
                 1,
             )
             return
-        xml = self.level.export(
+        intent = self.level.export(
             filename = filename,
             saveImage = True,
         )
@@ -2360,7 +2305,7 @@ class WME(tk.Tk):
         
         try:
             with open(filename, 'wb') as file:
-                file.write(xml)
+                file.write(intent)
             
             self.level._image.save(os.path.splitext(filename)[0] + '.png')
             
@@ -2381,21 +2326,28 @@ class WME(tk.Tk):
                 1,
             )
             return
-        
-        filename = filedialog.asksaveasfilename(
-            initialfile = os.path.basename(self.level.filename),
-            defaultextension = '.xml',
-            filetypes = (
-                ('WMW Level', '.xml'),
-                ('Any', '*.*')
-            ),
-            initialdir = wmwpy.utils.path.joinPath(
-                self.game.gamepath,
-                self.game.assets,
-                self.game.baseassets,
-                'Levels'
-            ),
-        )
+
+store = JsonStore("saved_levels.json")
+
+def saveLevel(self, *args):
+    file_input = TextInput(hint_text="Put the name of file...", multiline=False)
+    save_button = Button(text="Save", size_hint=(None, None))
+
+    def save_file(instance):
+        filename = file_input.text.strip()
+        if filename:
+            directory = "/storage/emulated/0/Download/Levels/"
+            path = os.path.join(directory, f"{filename}.xml")
+
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("<Objects></Objects>")
+
+            store.put(filename, path=path)
+            print(f"File saved: {path}")
+
+    save_button.bind(on_press=save_file)
+    self.add_widget(file_input)
+    self.add_widget(save_button)
         
         if filename in ['', None]:
             return
@@ -2460,7 +2412,7 @@ class WME(tk.Tk):
         gamepath = self.settings.get('game.gamepath')
         logging.debug(f'gamepath: {gamepath}')
         if not gamepath:
-            gamepath = filedialog.askdirectory(
+            gamepath = primary_external_storage_path(
                 parent = self,
                 title = 'Select Game directory',
                 mustexist = True,
