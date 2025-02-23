@@ -31,13 +31,6 @@ jobs:
         sed -i 's/^requirements =.*/requirements = python3,kivy/' buildozer.spec
         sed -i 's/^android.arch =.*/android.arch = arm64-v8a,armeabi-v7a/' buildozer.spec
 
-    - name:  Check main.py
-      run: |
-        if [ ! -f main-android.py ]; then
-          echo "❌ Not found main-android.py . Please check the path"
-          exit 1
-        fi
-
     - name: Run build.py
       run: |
         if [ -f build-android.py ]; then
