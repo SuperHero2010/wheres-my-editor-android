@@ -14,32 +14,48 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-    - name: Create buildozer.spec
-      run: |
-        if [ ! -f buildozer.spec ]; then
-          buildozer init
-        fi
 
-    - name: 🔧 Setup Buildozer & Dependencies
+    - name: Install Buildozer & Dependencies
       run: |
         sudo apt update && sudo apt install -y python3-pip openjdk-17-jdk build-essential git unzip
         pip install --upgrade pip
         pip install buildozer cython virtualenv
+        
+    - name: Create and update buildozer.spec
+      run: |
+        if [ ! -f buildozer.spec ]; then
+          buildozer init
+        fi
+        
+        sed -i 's/^source.include_exts =.*/source.include_exts = py,png,jpg,kv,atlas/' buildozer.spec
+        sed -i 's/^requirements =.*/requirements = python3,kivy/' buildozer.spec
+        sed -i 's/^android.arch =.*/android.arch = arm64-v8a,armeabi-v7a/' buildozer.spec
 
-    - name: Install Python Dependencies
-      run: pip install -r requirements/requirements-dist.txt
+    - name:  Check main.py
+      run: |
+        if [ ! -f main-android.py ]; then
+          echo "❌ Not found main-android.py . Please check the path"
+          exit 1
+        fi
 
     - name: Run build.py
-      run: python build-android.py
+      run: |
+        if [ -f build-android.py ]; then
+          python build-android.py
+        fi
 
-    - name: Build APK using Buildozer
-      run: buildozer -v android debug
+    - name: Build APK with Buildozer
+      run: |
+        chmod +x ./buildozer
+        buildozer -v android debug
 
-    - name: Move APK File
-      run: mv bin/*.apk wme-Android.apk
+    - name: Move file APK
+      run: |
+        mkdir -p release
+        mv bin/*.apk release/wme-Android.apk
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: "wme-android-${{ github.run_number }}"
-        path: wme-Android.apk
+        path: release/wme-Android.apk
