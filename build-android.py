@@ -35,6 +35,30 @@ elif current_platform == "linux" or current_platform == "darwin":
     print("📱 Running on Linux/Mac - Using Buildozer")
 
     debug = "--debug" in sys.argv
+    
+    android_main = "src/main-android.py"
+    if os.path.exists(android_main):
+        print("✅ Found main-android.py, copying to main.py")
+        os.rename(android_main, "src/main-android.py")
+    else:
+        print("❌ ERROR: main-android.py not found!")
+        sys.exit(1)
+        
+    icon_path = "src/assets/images/icon_256x256.ico"
+    if os.path.exists("buildozer.spec"):
+        with open("buildozer.spec", "r") as f:
+            spec_lines = f.readlines()
+
+        with open("buildozer.spec", "w") as f:
+            for line in spec_lines:
+                if line.startswith("android.icon ="):
+                    f.write(f"android.icon = {icon_path}\n")
+                else:
+                    f.write(line)
+    else:
+        print("⚠️ WARNING: buildozer.spec not found, running `buildozer init`...")
+        subprocess.run(["buildozer", "init"], check=True)
+
     build_command = ["buildozer", "-v", "android", "debug" if debug else "release"]
 
     try:
@@ -43,7 +67,3 @@ elif current_platform == "linux" or current_platform == "darwin":
     except subprocess.CalledProcessError:
         print("❌ Error when build APK.")
         sys.exit(1)
-
-else:
-    print(f"⚠️ This device isn't supported: {current_platform}")
-    sys.exit(1)
