@@ -1,0 +1,40 @@
+name: Package Application - Android
+
+on: 
+  workflow_dispatch:
+  push:
+    branches:
+      - main 
+
+jobs:
+  android-build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🔧 Setup Buildozer & Dependencies
+      run: |
+        sudo apt update && sudo apt install -y python3-pip openjdk-17-jdk build-essential git unzip
+        pip install --upgrade pip
+        pip install buildozer cython virtualenv
+
+    - name: Install Python Dependencies
+      run: pip install -r requirements/requirements-dist.txt
+
+    - name: Run build.py
+      run: python build-android.py
+
+    - name: Build APK using Buildozer
+      run: buildozer -v android debug
+
+    - name: Move APK File
+      run: mv bin/*.apk wme-Android.apk
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: "wme-android-${{ github.run_number }}"
+        path: wme-Android.apk
