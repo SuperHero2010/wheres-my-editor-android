@@ -8,13 +8,19 @@ Where's My Editor? is a level editor for the mobile game, Where's My Water? and 
 
 NOTE: If you came here to read a .waltex image, then go to [wmwpy](https://github.com/wmw-modding/wmwpy/blob/main/src/wmwpy/utils/waltex.py). `waltex.py` has moved there.
 
-# Get started
-To get started
-1. Get the latest release from the [releases tab](https://github.com/wmw-modding/wheres-my-editor/releases/latest). Extract the zip folder into it's own folder (to keep it's files organized).
+# Get started (Windows/MacOS/Linux)
+To get started:
+1. Get the latest release from the [releases tab](https://github.com/SuperHero2010/wheres-my-editor/releases/latest). Extract the zip folder into it's own folder (to keep it's files organized).
 2. Next, you need to get the game files. You can get them in many ways, but generally, you want to have the game extracted into a folder, and all the assets in the `assets` (or `Content`) folder.
 3. Open the Where's My Editor app (wme.exe)
 4. Select the game folder.
 5. Now you got it up and running.
+
+# Get started (Android)
+1. Get the latest release from the [releases tab](https://github.com/SuperHero2010/wheres-my-editor-android/releases/latest)
+2. Next, you need to go to File/Settings, then paste the path from memory to the WMW game folder
+3. Open Where's my Editor app again
+4. Now you got it up and running
 
 If you run into any issues, please send a bug report (shortcut in **Help > Send bug report**, or the issues page in this repository).
 
