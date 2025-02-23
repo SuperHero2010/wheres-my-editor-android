@@ -15,41 +15,37 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install Buildozer & Dependencies
+    - name: Setup Buildozer & Dependencies
       run: |
         sudo apt update && sudo apt install -y python3-pip openjdk-17-jdk build-essential git unzip aidl
         pip install --upgrade pip
-        pip install buildozer cython virtualenv
-        pip install -r requirements/requirements-nightly.txt
-        
-    - name: Create and update buildozer.spec
+        pip install buildozer cython virtualenv 
+
+    - name: Create buildozer.spec
       run: |
         if [ ! -f buildozer.spec ]; then
           buildozer init
         fi
-        
-        sed -i 's/^source.include_exts =.*/source.include_exts = py,png,jpg,kv,atlas/' buildozer.spec
-        sed -i 's/^requirements =.*/requirements = python3,kivy/' buildozer.spec
-        sed -i 's/^android.arch =.*/android.arch = arm64-v8a,armeabi-v7a/' buildozer.spec
 
-    - name: Run build.py
+    - name: Edit buildozer.spec
       run: |
-        if [ -f build-android.py ]; then
-          python build-android.py
-        fi
+        sed -i 's|source.include_exts = py,png,jpg,kv,atlas|source.include_exts = py,png,jpg,ico,kv,atlas|' buildozer.spec
+        sed -i 's|source.exclude_exts = txt,pyc|source.exclude_exts = txt,pyc,md|' buildozer.spec
+        sed -i 's|^source.include_patterns =|source.include_patterns = src/main-android.py, src/assets/images/icon_256x256.ico|' buildozer.spec
+        sed -i 's|application_name =.*|application_name = WME Android|' buildozer.spec
+        sed -i 's|package.domain =.*|package.domain = com.yourdomain.wme|' buildozer.spec
+        sed -i 's|package.name =.*|package.name = wme|' buildozer.spec
+        sed -i 's|package.version =.*|package.version = 1.0.0|' buildozer.spec
+        sed -i 's|android.icon =.*|android.icon = src/assets/images/icon_256x256.ico|' buildozer.spec
 
-    - name: Build APK with Buildozer
-      run: |
-        chmod +x ./buildozer
-        buildozer -v android debug
+    - name: Build APK using Buildozer
+      run: buildozer -v android debug
 
-    - name: Move file APK
-      run: |
-        mkdir -p release
-        mv bin/*.apk release/wme-Android.apk
+    - name: Move APK File
+      run: mv bin/*.apk wme-Android.apk
 
-    - name: Upload APK
+    - name: 📁 Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: "wme-android-${{ github.run_number }}"
-        path: release/wme-Android.apk
+        path: wme-Android.apk
